@@ -57,6 +57,13 @@ const bookSchema = new mongoose.Schema({
   fileUri : {
     type : String,
     required : true
+  },
+  progress: {
+    type: Number,
+    default: 0,
+    required : true,
+    min: 0,
+    max: 100
   }
 });
 
