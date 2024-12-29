@@ -96,6 +96,42 @@ const addNewBooksInLibrary = async (booksToAdd, userId) => {
     }
 };
 
+// Function to delete a book
+const deleteBook = async (bookId, userId) => {
+    try {
+        const book = await Book.findOneAndDelete({ _id: bookId, user: userId });
+        
+        if (!book) {
+            throw new Error('Book not found or unauthorized');
+        }
+        
+        return book;
+    } catch (err) {
+        console.error('Error deleting book:', err);
+        throw err;
+    }
+};
+
+// Function to update book progress
+const updateBookProgress = async (bookId, progress, userId) => {
+    try {
+        const book = await Book.findOneAndUpdate(
+            { _id: bookId, user: userId },
+            { progress: progress },
+            { new: true }
+        );
+        
+        if (!book) {
+            throw new Error('Book not found or unauthorized');
+        }
+        
+        return book;
+    } catch (err) {
+        console.error('Error updating book progress:', err);
+        throw err;
+    }
+};
+
 router.post('/addNewBooksInLibrary', async (req,res) => {
     try {
         const booksToAdd = req.body;
@@ -118,6 +154,57 @@ router.post('/addNewBooksInLibrary', async (req,res) => {
 }
 )
 
+// Route to update book progress
+router.put('/progress/:bookId', async (req, res) => {
+    try {
+        const { bookId } = req.params;
+        const { progress } = req.body;
+        const userId = 'default_id'; // Replace with actual user authentication later
+        
+        if (progress < 0 || progress > 100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Progress must be between 0 and 100'
+            });
+        }
+
+        const updatedBook = await updateBookProgress(bookId, progress, userId);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Progress updated successfully',
+            book: updatedBook
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: 'Error updating book progress',
+            error: err.message
+        });
+    }
+});
+
+// Route to delete a book
+router.delete('/deleteBook/:bookId', async (req, res) => {
+    try {
+        const { bookId } = req.params;
+        const userId = 'default_id'; // Replace with actual user authentication later
+        
+        const deletedBook = await deleteBook(bookId, userId);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Book deleted successfully',
+            book: deletedBook
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting book',
+            error: err.message
+        });
+    }
+});
 // Get all books for a user
 // Routes
 router.get('/', async (req, res) => {
