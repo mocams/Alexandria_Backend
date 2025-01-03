@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Book = require('../../models/bookModel');
-const Category = require('../../models/CategoryModel');  //
+const Category = require('../../models/categoryModel');  //
 // Function to create a normalized fingerprint
 const createBookFingerprint = (title, author) => {
     // Remove special characters, extra spaces, and convert to lowercase
