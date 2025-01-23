@@ -19,6 +19,7 @@ app.get('/', (req, res) => {
 });
 app.use('/api/books',require('./routes/api/books'))
 app.use('/api/categories', require('./routes/api/categories'))
+app.use('/api/auth', require('./routes/api/auth'));
 
 app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
