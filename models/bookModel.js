@@ -64,6 +64,12 @@ const bookSchema = new mongoose.Schema({
     required : true,
     min: 0,
     max: 100
+  },
+  fileType : {
+    type : String,
+    required : true,
+    trim : true,
+    default : 'pdf'
   }
 });
 
