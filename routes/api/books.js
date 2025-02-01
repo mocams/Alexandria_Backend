@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const Book = require('../../models/bookModel');
 const Category = require('../../models/categoryModel');  //
+const User = require('../../models/userModel');  //
+const {authMiddleware} = require('../../middlewares/authMiddleware')
+
 // Function to create a normalized fingerprint
 const createBookFingerprint = (title, author) => {
     // Remove special characters, extra spaces, and convert to lowercase
@@ -86,6 +89,10 @@ const addNewBooksInLibrary = async (booksToAdd, userId) => {
 
             const newBook = await Book.create(bookToAdd);
             results.added.push(newBook);
+
+            // After creating the book, update user's storage
+            const user = await User.findById(userId);
+            await user.updateStorageUsed();
         }
 
         return results;
@@ -132,11 +139,12 @@ const updateBookProgress = async (bookId, progress, userId) => {
     }
 };
 
-router.post('/addNewBooksInLibrary', async (req,res) => {
+// Update the route to use authMiddleware
+router.post('/addNewBooksInLibrary',authMiddleware, async (req, res) => {
     try {
         const booksToAdd = req.body;
-        //const userId = req.user._id;
-        const userId = 'default_id'
+        const userId = req.user._id;  // Get the real user ID from the authenticated request
+        
         const result = await addNewBooksInLibrary(booksToAdd, userId);
         
         res.status(200).json({ 
@@ -151,15 +159,14 @@ router.post('/addNewBooksInLibrary', async (req,res) => {
             error: err.message 
         });
     }
-}
-)
+});
 
 // Route to update book progress
-router.put('/progress/:bookId', async (req, res) => {
+router.put('/progress/:bookId', authMiddleware, async (req, res) => {
     try {
         const { bookId } = req.params;
         const { progress } = req.body;
-        const userId = 'default_id'; // Replace with actual user authentication later
+        const userId = req.user._id;  // Get real user ID
         
         if (progress < 0 || progress > 100) {
             return res.status(400).json({
@@ -185,10 +192,10 @@ router.put('/progress/:bookId', async (req, res) => {
 });
 
 // Route to delete a book
-router.delete('/deleteBook/:bookId', async (req, res) => {
+router.delete('/deleteBook/:bookId', authMiddleware, async (req, res) => {
     try {
         const { bookId } = req.params;
-        const userId = 'default_id'; // Replace with actual user authentication later
+        const userId = req.user._id;  // Get real user ID
         
         const deletedBook = await deleteBook(bookId, userId);
         
@@ -205,11 +212,11 @@ router.delete('/deleteBook/:bookId', async (req, res) => {
         });
     }
 });
+
 // Get all books for a user
-// Routes
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
     try {
-        const userId = 'default_id';
+        const userId = req.user._id;  // Get real user ID
         const { books, count } = await getAllUserBooks(userId);
 
         res.status(200).json({
