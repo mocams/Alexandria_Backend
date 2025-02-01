@@ -28,9 +28,9 @@ const bookSchema = new mongoose.Schema({
     default  : ''
   },*/
   user: {
-    type: 'String',
-    required: true,
-    default  : 'default_id'
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
   categories: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -70,6 +70,11 @@ const bookSchema = new mongoose.Schema({
     required : true,
     trim : true,
     default : 'pdf'
+  },
+  read : {
+    type : Boolean,
+    default : false,
+    required : true
   }
 });
 

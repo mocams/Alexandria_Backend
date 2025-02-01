@@ -22,11 +22,11 @@ const generateToken = (userId) => {
 // Register new user
 router.post('/register', async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        const { email, password } = req.body;
 
         // Check if user already exists
         const existingUser = await User.findOne({ 
-            $or: [{ email }, { username }] 
+            $or: [{ email }] 
         });
 
         if (existingUser) {
@@ -38,7 +38,6 @@ router.post('/register', async (req, res) => {
 
         // Create new user
         const user = new User({
-            username,
             email,
             password
         });

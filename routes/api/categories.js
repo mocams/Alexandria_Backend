@@ -2,11 +2,12 @@ const express = require('express');
 const router = express.Router();
 const Category = require('../../models/categoryModel')
 const Book = require('../../models/bookModel');
+const { authMiddleware } = require('../../middlewares/authMiddleware');
 
 // Create a new category
-router.post('/createCategory', async (req, res) => {
+router.post('/createCategory', authMiddleware, async (req, res) => {
     try {
-        const userId = 'default_id'; // Replace with actual user authentication later
+        const userId = req.user._id;  // Get real user ID
         const { name, description } = req.body;
 
         const category = await Category.create({
@@ -30,9 +31,9 @@ router.post('/createCategory', async (req, res) => {
 });
 
 // Get all categories for a user
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
     try {
-        const userId = 'default_id'; // Replace with actual user authentication later
+        const userId = req.user._id;  // Get real user ID
         const categories = await Category.find({ user: userId });
 
         res.status(200).json({
@@ -49,11 +50,11 @@ router.get('/', async (req, res) => {
 });
 
 // Update book's category
-router.put('/updateBookCategory/:bookId', async (req, res) => {
+router.put('/updateBookCategory/:bookId', authMiddleware, async (req, res) => {
     try {
         const { bookId } = req.params;
         const { categoryId } = req.body;
-        const userId = 'default_id'; // Replace with actual user authentication later
+        const userId = req.user._id;  // Get real user ID
 
         let updateOperation;
         if (categoryId) {
@@ -133,10 +134,10 @@ router.delete('/:categoryId/books/:bookId', async (req, res) => {
 });
 
 // Delete category
-router.delete('/:categoryId', async (req, res) => {
+router.delete('/:categoryId', authMiddleware, async (req, res) => {
     try {
         const { categoryId } = req.params;
-        const userId = 'default_id'; // Replace with actual user authentication later
+        const userId = req.user._id;  // Get real user ID
 
         // Remove category from all books
         await Book.updateMany(
