@@ -30,11 +30,15 @@ router.post('/createCategory', authMiddleware, async (req, res) => {
     }
 });
 
-// Get all categories for a user
+// Get all categories for a user with populated books
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const userId = req.user._id;  // Get real user ID
-        const categories = await Category.find({ user: userId });
+        const userId = req.user._id;
+        const categories = await Category.find({ user: userId })
+            .populate({
+                path: 'books',
+                select: 'title author coverPath read progress' // Select the fields you want to return
+            });
 
         res.status(200).json({
             success: true,
@@ -54,9 +58,9 @@ router.put('/updateBookCategory/:bookId', authMiddleware, async (req, res) => {
     try {
         const { bookId } = req.params;
         const { categoryId } = req.body;
-        const userId = req.user._id;  // Get real user ID
+        const userId = req.user._id;
 
-        let updateOperation;
+        // If categoryId is provided, update both book and category
         if (categoryId) {
             // Verify category exists and user has access
             const category = await Category.findOne({ _id: categoryId, user: userId });
@@ -66,31 +70,85 @@ router.put('/updateBookCategory/:bookId', authMiddleware, async (req, res) => {
                     message: 'Category not found or unauthorized'
                 });
             }
-            updateOperation = { $set: { categories: [categoryId] } };
+
+            // Remove book from all categories first
+            await Category.updateMany(
+                { user: userId },
+                { $pull: { books: bookId } }
+            );
+
+            // Add book to new category
+            await Category.findByIdAndUpdate(
+                categoryId,
+                { $addToSet: { books: bookId } }
+            );
+
+            // Update book's categories
+            const updatedBook = await Book.findOneAndUpdate(
+                { _id: bookId, user: userId },
+                { $set: { categories: [categoryId] } },
+                { new: true }
+            ).populate('categories');
+
+            // Get all updated categories with populated books
+            const allCategories = await Category.find({ user: userId })
+                .populate({
+                    path: 'books',
+                    select: 'title author coverPath read progress'
+                });
+
+            res.status(200).json({
+                success: true,
+                message: 'Book category updated successfully',
+                book: updatedBook,
+                categories: allCategories
+            });
         } else {
-            // If categoryId is null, remove all categories
-            updateOperation = { $set: { categories: [] } };
-        }
+            // If no categoryId, find the uncategorized category
+            const uncategorizedCategory = await Category.findOne({ 
+                user: userId, 
+                isDefault: true 
+            });
 
-        // Update the book
-        const updatedBook = await Book.findOneAndUpdate(
-            { _id: bookId, user: userId },
-            updateOperation,
-            { new: true }
-        ).populate('categories');
+            // Remove book from all categories
+            await Category.updateMany(
+                { user: userId },
+                { $pull: { books: bookId } }
+            );
 
-        if (!updatedBook) {
-            return res.status(404).json({
-                success: false,
-                message: 'Book not found or unauthorized'
+            // Add book to uncategorized category
+            if (uncategorizedCategory) {
+                await Category.findByIdAndUpdate(
+                    uncategorizedCategory._id,
+                    { $addToSet: { books: bookId } }
+                );
+            }
+
+            // Update book to use uncategorized category
+            const updatedBook = await Book.findOneAndUpdate(
+                { _id: bookId, user: userId },
+                { 
+                    $set: { 
+                        categories: uncategorizedCategory ? [uncategorizedCategory._id] : [] 
+                    } 
+                },
+                { new: true }
+            ).populate('categories');
+
+            // Get all updated categories with populated books
+            const allCategories = await Category.find({ user: userId })
+                .populate({
+                    path: 'books',
+                    select: 'title author coverPath read progress'
+                });
+
+            res.status(200).json({
+                success: true,
+                message: 'Book moved to uncategorized category',
+                book: updatedBook,
+                categories: allCategories
             });
         }
-
-        res.status(200).json({
-            success: true,
-            message: 'Book category updated successfully',
-            book: updatedBook
-        });
     } catch (err) {
         res.status(500).json({
             success: false,
@@ -137,9 +195,9 @@ router.delete('/:categoryId/books/:bookId', async (req, res) => {
 router.delete('/:categoryId', authMiddleware, async (req, res) => {
     try {
         const { categoryId } = req.params;
-        const userId = req.user._id;  // Get real user ID
+        const userId = req.user._id;
 
-        // Remove category from all books
+        // Update all books to remove this category
         await Book.updateMany(
             { user: userId },
             { $pull: { categories: categoryId } }

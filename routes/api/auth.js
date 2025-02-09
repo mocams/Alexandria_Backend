@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../../models/UserModel');
+const Category = require('../../models/categoryModel');
 
 const JWT_SECRET = 'your-secret-key'; // Move this to environment variables in production
 
@@ -24,35 +25,42 @@ router.post('/register', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Check if user already exists
-        const existingUser = await User.findOne({ 
-            $or: [{ email }] 
-        });
-
+        // Check if user exists
+        const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({
                 success: false,
-                message: 'User with this email or username already exists'
+                message: 'User already exists'
             });
         }
 
         // Create new user
-        const user = new User({
-            email,
-            password
-        });
-
+        const user = new User({ email, password });
         await user.save();
 
-        // Generate token with expiration
+        // Create default "Uncategorized" category for the user
+        const uncategorizedCategory = await Category.create({
+            name: 'Uncategorized',
+            description: 'Default category for uncategorized books',
+            user: user._id,
+        });
+
+        // Generate token
         const { token, expirationMs } = generateToken(user._id);
+
+        // Get complete stats (will be empty for new user)
+        const stats = await user.getCompleteStats();
 
         res.status(201).json({
             success: true,
             message: 'User registered successfully',
             token,
-            user,
             expirationMs,
+            user: {
+                id: user._id,
+                email: user.email,
+                stats: stats
+            }
         });
     } catch (err) {
         res.status(500).json({
@@ -89,13 +97,19 @@ router.post('/login', async (req, res) => {
         // Generate token with expiration
         const { token, expirationMs } = generateToken(user._id);
 
+        // Get complete stats
+        const stats = await user.getCompleteStats();
 
         res.json({
             success: true,
             message: 'Login successful',
             token,
-            user,
-            expirationMs
+            expirationMs,
+            user: {
+                id: user._id,
+                email: user.email,
+                stats
+            }
         });
     } catch (err) {
         res.status(500).json({

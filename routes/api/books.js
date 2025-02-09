@@ -69,6 +69,20 @@ const addNewBooksInLibrary = async (booksToAdd, userId) => {
             duplicates: []
         };
 
+        // Find or create the uncategorized category
+        let uncategorizedCategory = await Category.findOne({ 
+            user: userId,
+        });
+
+        // If no default category exists, create it
+        if (!uncategorizedCategory) {
+            uncategorizedCategory = await Category.create({
+                name: 'Uncategorized',
+                description: 'Default category for uncategorized books',
+                user: userId,
+            });
+        }
+
         for (const book of booksToAdd) {
             const isDuplicate = await isBookDuplicate(book, userId);
             
@@ -80,25 +94,28 @@ const addNewBooksInLibrary = async (booksToAdd, userId) => {
                 continue;
             }
 
-            // Add fingerprint and userId to the book
+            // Add fingerprint, userId, and default category to the book
             const bookToAdd = {
                 ...book,
                 user: userId,
-                fingerprint: createBookFingerprint(book.title, book.author)
+                fingerprint: createBookFingerprint(book.title, book.author),
+                categories: [uncategorizedCategory._id]  // Add to uncategorized by default
             };
 
             const newBook = await Book.create(bookToAdd);
-            results.added.push(newBook);
+            
+            // Add book to uncategorized category
+            await Category.findByIdAndUpdate(
+                uncategorizedCategory._id,
+                { $addToSet: { books: newBook._id } }
+            );
 
-            // After creating the book, update user's storage
-            const user = await User.findById(userId);
-            await user.updateStorageUsed();
+            results.added.push(newBook);
         }
 
         return results;
-    }
-    catch(err) {
-        console.log(err);
+    } catch(err) {
+        console.error('Error adding books:', err);
         throw err;
     }
 };

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const Book = require('./bookModel');
 
 const userSchema = new mongoose.Schema({
     email: {
@@ -13,18 +14,14 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true,
         minlength: 6
-    },
-    storageUsed: {
-        type: Number,
-        default: 0  // in bytes
     }
 }, {
     timestamps: true,
-    toJSON: { virtuals: true },  // Include virtuals when converting to JSON
+    toJSON: { virtuals: true },
     toObject: { virtuals: true }
 });
 
-// Virtual field for total books
+// Virtual for total books
 userSchema.virtual('totalBooks', {
     ref: 'Book',
     localField: '_id',
@@ -32,24 +29,70 @@ userSchema.virtual('totalBooks', {
     count: true
 });
 
-// Virtual field for total books read
+// Virtual for total books read
 userSchema.virtual('totalBooksRead', {
     ref: 'Book',
     localField: '_id',
     foreignField: 'user',
     count: true,
-    match: { read: true }  // Only count books where read is true
+    match: { read: true }
 });
 
-// Method to update storage used
-userSchema.methods.updateStorageUsed = async function() {
-    const Book = mongoose.model('Book');
-    const books = await Book.find({ user: this._id });
+// Method to get books stats by category
+userSchema.methods.getBookStatsByCategory = async function() {
+    const stats = await Book.aggregate([
+        // Match books for this user
+        { $match: { user: this._id } },
+        // Unwind categories array to handle books in multiple categories
+        { $unwind: { path: '$categories', preserveNullAndEmptyArrays: true } },
+        // Group by category
+        {
+            $group: {
+                _id: '$categories',
+                totalBooks: { $sum: 1 },
+                readBooks: {
+                    $sum: { $cond: [{ $eq: ['$read', true] }, 1, 0] }
+                }
+            }
+        },
+        // Lookup category details
+        {
+            $lookup: {
+                from: 'categories',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'categoryDetails'
+            }
+        },
+        // Unwind category details
+        { $unwind: { path: '$categoryDetails', preserveNullAndEmptyArrays: true } },
+        // Project final format
+        {
+            $project: {
+                _id: 1,
+                categoryName: { $ifNull: ['$categoryDetails.name', 'Uncategorized'] },
+                totalBooks: 1,
+                readBooks: 1,
+                unreadBooks: { $subtract: ['$totalBooks', '$readBooks'] }
+            }
+        }
+    ]);
+
+    return stats;
+};
+
+// Method to get complete user stats
+userSchema.methods.getCompleteStats = async function() {
+    await this.populate(['totalBooks', 'totalBooksRead']);
     
-    // Calculate total storage (assuming each book has a size field)
-    // You'll need to add logic to calculate/store file sizes when adding books
-    this.storageUsed = books.reduce((total, book) => total + (book.fileSize || 0), 0);
-    await this.save();
+    const categoryStats = await this.getBookStatsByCategory();
+    
+    return {
+        totalBooks: this.totalBooks || 0,
+        totalBooksRead: this.totalBooksRead || 0,
+        totalUnreadBooks: (this.totalBooks || 0) - (this.totalBooksRead || 0),
+        categoriesStats: categoryStats
+    };
 };
 
 // Hash password before saving
@@ -69,30 +112,5 @@ userSchema.pre('save', async function(next) {
 userSchema.methods.comparePassword = async function(candidatePassword) {
     return bcrypt.compare(candidatePassword, this.password);
 };
-
-// Method to get user stats
-userSchema.methods.getStats = async function() {
-    await this.populate(['totalBooks', 'totalBooksRead']);
-    
-    return {
-        totalBooks: this.totalBooks || 0,
-        totalBooksRead: this.totalBooksRead || 0,
-        storageUsed: this.storageUsed || 0,
-        storageUsedFormatted: formatBytes(this.storageUsed)
-    };
-};
-
-// Helper function to format bytes into readable format
-function formatBytes(bytes, decimals = 2) {
-    if (bytes === 0) return '0 Bytes';
-
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-}
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema); 
